@@ -1,0 +1,69 @@
+#!/usr/bin/env ruby
+
+require 'logger'
+require 'fileutils'
+require 'erb'
+require 'nokogiri'
+require 'date'
+require 'rinku'
+
+CHATS_DIR = ENV.fetch('CHATS_DIR', '/mnt/chats')
+HTML_DIR = ENV.fetch('HTML_DIR', '/mnt/html')
+CHATLOG_EXT = ENV.fetch('CHATLOG_EXT', '.chatlog')
+IMAGE_EXTS = ENV.fetch('IMAGE_EXTS', 'png,jpg,jpeg,gif')
+LOG_TEMPLATE = File.join(File.dirname(__FILE__), '..', 'views', 'log.erb')
+
+logger = Logger.new(STDOUT).tap { |l| l.level = Logger::INFO }
+
+def parse_time(time)
+  DateTime.parse(time.gsub('.', ':').gsub(/-(\d{4})$/, '+\\1'))
+end
+
+Dir.new(CHATS_DIR).each do |subdir|
+  subdir_path = File.join(CHATS_DIR, subdir)
+
+  next unless File.directory?(subdir_path) && subdir !~ /^\./
+  next if ENV['SUBDIR'] && subdir != ENV['SUBDIR']
+
+  logger.info "Processing chatlogs for #{subdir}"
+
+  html_dir_path = File.join(HTML_DIR, subdir)
+  Dir.mkdir(html_dir_path) unless File.directory?(html_dir_path)
+
+  Dir.glob(File.join(subdir_path, "*#{CHATLOG_EXT}")).each do |chatlog_path|
+    basename = File.basename(chatlog_path, CHATLOG_EXT)
+    time = parse_time(basename.match(/\((.*)\)/)[1])
+    logger.info "\tParsing \"#{basename}\""
+
+    doc = File.open(chatlog_path) { |f| Nokogiri::XML(f) }
+    doc.remove_namespaces!
+
+    messages = doc.xpath('//chat//message').reject { |message| message['sender'] == "" }
+    messages = messages.map do |message|
+      {
+        sender: message['sender'],
+        time:   parse_time(message['time']),
+        text:   message.text,
+        image:  message.xpath('.//img/@src').first&.to_s&.prepend('images/')
+      }
+    end
+
+    renderer = ERB.new(File.read(LOG_TEMPLATE))
+    output = renderer.result_with_hash({
+      time:     time,
+      sender:   subdir,
+      messages: messages
+    })
+
+    html_file = File.join(html_dir_path, "#{basename.gsub(/\s/, '-').gsub(/(\(|\))/, '')}.html")
+    File.open(html_file, "w") { |f| f.write output }
+  end
+
+  if images = Dir.glob(File.join(subdir_path, "*.{#{IMAGE_EXTS}}")) && images.size > 0
+    logger.info "\tCopying #{images.size} images..."
+
+    image_dir = File.join(html_dir_path, 'images')
+    Dir.mkdir(image_dir) unless File.directory?(image_dir)
+    images.each { |image| FileUtils.cp(image, image_dir) }
+  end
+end
