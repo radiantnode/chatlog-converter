@@ -4,7 +4,7 @@ Converts Adium (and iChat) chat logs into HTML.
 
 ## Download source and build the Docker image
 
-```bash
+```
 git clone git@github.com:radiantnode/chatlog-converter.git
 cd chatlog-converter
 docker build --tag chatlog-converter .
@@ -14,7 +14,7 @@ docker build --tag chatlog-converter .
 
 You will need to mount two volumes: `/mnt/chats` which is the directory that contains the `.chatlog` files, and `/mnt/html` which will be where converted logs will be written.
 
-```bash
+```
 docker run \
   --interactive --tty \
   --volume '/Users/michael/Library/Application Support/Adium 2.0/Users/Default/Logs/AIM.radiantnode':/mnt/chats \
@@ -34,7 +34,7 @@ You can pass any of these options as an `--env` on the run command:
 | `IMAGE_EXTS`  | Extensions used to search for images in the logs. | `png,jpg,jpeg,gif` |
 | `SUBDIR`      | If provided will only process that subdirectory.  | `nil`              |
 
-## Converting iChat logs to Adium
+## Converting iChat transcripts to Adium
 
 If you have iChat transcripts and want to use this converter, you will need to convert them to Adium chat logs first. Adium has a built-in importer to do this.
 
